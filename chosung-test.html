@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>가을 초성 맞추기</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Jua", "Malgun Gothic", sans-serif;
+    background: linear-gradient(#fff4e0, #ffe0c2); color: #5a3a1a;
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    padding: 16px; user-select: none; -webkit-user-select: none;
+  }
+  h1 { margin: 4px 0 8px; font-size: 28px; }
+  .chosung {
+    font-size: 72px; letter-spacing: 18px; font-weight: bold; color: #c0392b;
+    background: #fff; border-radius: 24px; padding: 8px 32px; margin: 8px 0;
+    box-shadow: 0 4px 0 #e0b090;
+  }
+  .hint { font-size: 18px; margin-bottom: 8px; }
+  #pad {
+    background: #fff; border: 4px dashed #e0a060; border-radius: 20px;
+    touch-action: none; width: min(92vw, 720px); height: 260px; cursor: crosshair;
+  }
+  .btns { display: flex; gap: 12px; margin: 14px 0; flex-wrap: wrap; justify-content: center; }
+  button {
+    font-size: 22px; padding: 12px 26px; border: none; border-radius: 16px;
+    cursor: pointer; font-family: inherit; box-shadow: 0 4px 0 rgba(0,0,0,.15);
+  }
+  #checkBtn { background: #27ae60; color: #fff; }
+  #clearBtn { background: #f1c40f; color: #5a3a1a; }
+  #nextBtn  { background: #e67e22; color: #fff; }
+  #fsBtn {
+    position: fixed; top: 12px; right: 12px; z-index: 10;
+    font-size: 18px; padding: 8px 16px; background: #8e6e53; color: #fff;
+  }
+  #result {
+    width: min(92vw, 720px); background: #fff; border-radius: 20px; padding: 16px 20px;
+    font-size: 20px; min-height: 80px; text-align: center;
+  }
+  .ok { color: #27ae60; font-size: 34px; font-weight: bold; }
+  .no { color: #c0392b; font-size: 30px; font-weight: bold; }
+  .desc { margin-top: 10px; font-size: 22px; line-height: 1.5; }
+  .match { display: flex; justify-content: center; gap: 40px; font-size: 24px; margin-bottom: 8px; }
+  .match b { font-size: 30px; }
+</style>
+</head>
+<body>
+  <button id="fsBtn">전체화면</button>
+  <h1>🍁 가을 초성 맞추기</h1>
+  <div class="chosung" id="chosung"></div>
+  <div class="hint">아래 칸에 정답 낱말을 손가락으로 써 보세요!</div>
+  <canvas id="pad"></canvas>
+  <div class="btns">
+    <button id="clearBtn">🧽 지우기</button>
+    <button id="checkBtn">✅ 확인하기</button>
+    <button id="nextBtn">➡️ 다음 문제</button>
+  </div>
+  <div id="result">글씨를 쓰고 ‘확인하기’를 눌러 주세요.</div>
+
+<script>
+// ===== 가을 낱말 목록 (낱말 / 설명) =====
+const WORDS = [
+  ["가을", "여름과 겨울 사이의 계절이에요. 나뭇잎이 물들고 열매가 익어요."],
+  ["은행", "은행나무에 열리는 작고 노란 열매예요. 구워 먹으면 고소한 맛이 나요."],
+  ["단풍", "가을에 나뭇잎이 빨갛고 노랗게 물드는 것을 말해요."],
+  ["도토리", "참나무에 열리는 동그란 열매예요. 다람쥐가 아주 좋아해요."],
+  ["낙엽", "나무에서 떨어진 잎이에요. 밟으면 바스락 소리가 나요."],
+  ["송편", "추석에 먹는 떡으로, 반달 모양이고 안에 깨나 콩을 넣어요."],
+  ["다람쥐", "등에 줄무늬가 있는 작은 동물로, 가을에 도토리를 모아 겨울을 준비해요."],
+  ["밤", "가시가 뾰족한 껍질 속에 들어 있는 갈색 열매예요. 구워 먹으면 맛있어요."],
+  ["감", "가을에 주황색으로 익는 열매예요. 말리면 곶감이 돼요."],
+  ["사과", "가을에 빨갛게 익는 달콤한 과일이에요."],
+  ["추석", "음력 8월 15일, 가족이 모여 송편을 빚고 차례를 지내는 명절이에요."],
+  ["보름달", "동그랗게 꽉 찬 달이에요. 추석에는 보름달을 보며 소원을 빌어요."],
+  ["귀뚜라미", "가을밤에 귀뚤귀뚤 우는 곤충이에요."],
+  ["고구마", "땅속에서 자라는 뿌리로, 껍질이 보라색이에요. 군고구마로 먹으면 달콤해요."],
+  ["포도", "동글동글한 알이 송이로 달리는 보라색 과일이에요."]
+];
+
+// ===== 초성 뽑기 =====
+const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+function toChosung(word) {
+  return [...word].map(ch => {
+    const c = ch.charCodeAt(0) - 0xAC00;
+    return (c >= 0 && c <= 11171) ? CHO[Math.floor(c / 588)] : ch;
+  }).join("");
+}
+
+// 받침이 있으면 "이었어요", 없으면 "였어요"
+function hasBatchim(word) {
+  const c = word.charCodeAt(word.length - 1) - 0xAC00;
+  return c >= 0 && c <= 11171 && c % 28 !== 0;
+}
+
+// 무작위 순서: 모든 낱말이 한 번씩 나온 뒤 다시 섞어요
+let order = [], idx = 0;
+function shuffle() {
+  const last = order.length ? order[order.length - 1] : -1;
+  order = WORDS.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  if (order[0] === last && order.length > 1) [order[0], order[1]] = [order[1], order[0]];
+}
+function nextWord() {
+  if (!order.length) shuffle();
+  idx = order.shift();
+}
+function showQuestion() {
+  document.getElementById("chosung").textContent = toChosung(WORDS[idx][0]);
+  clearPad();
+  document.getElementById("result").textContent = "글씨를 쓰고 ‘확인하기’를 눌러 주세요.";
+}
+
+// ===== 손글씨 캔버스 =====
+const pad = document.getElementById("pad");
+const ctx = pad.getContext("2d");
+let strokes = [], cur = null, startTime = 0;
+
+function resizePad() {
+  const r = pad.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  pad.width = r.width * dpr; pad.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineWidth = 8; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#333";
+  redraw();
+}
+function redraw() {
+  ctx.clearRect(0, 0, pad.width, pad.height);
+  for (const s of strokes) {
+    ctx.beginPath();
+    s[0].forEach((x, i) => i ? ctx.lineTo(x, s[1][i]) : ctx.moveTo(x, s[1][i]));
+    ctx.stroke();
+  }
+}
+function pos(e) { const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+pad.addEventListener("pointerdown", e => {
+  pad.setPointerCapture(e.pointerId);
+  if (!startTime) startTime = Date.now();
+  const [x, y] = pos(e);
+  cur = [[x], [y], [Date.now() - startTime]];
+  strokes.push(cur);
+});
+pad.addEventListener("pointermove", e => {
+  if (!cur) return;
+  const [x, y] = pos(e);
+  cur[0].push(x); cur[1].push(y); cur[2].push(Date.now() - startTime);
+  const n = cur[0].length;
+  ctx.beginPath(); ctx.moveTo(cur[0][n-2], cur[1][n-2]); ctx.lineTo(x, y); ctx.stroke();
+});
+["pointerup", "pointercancel"].forEach(t => pad.addEventListener(t, () => cur = null));
+
+function clearPad() { strokes = []; startTime = 0; redraw(); }
+
+// ===== 손글씨 인식 (Google 손글씨 인식) =====
+async function recognize() {
+  const r = pad.getBoundingClientRect();
+  const body = {
+    options: "enable_pre_space",
+    requests: [{
+      writing_guide: { writing_area_width: Math.round(r.width), writing_area_height: Math.round(r.height) },
+      ink: strokes.map(s => [s[0].map(Math.round), s[1].map(Math.round), s[2]]),
+      language: "ko"
+    }]
+  };
+  const res = await fetch("https://inputtools.google.com/request?ime=handwriting&app=mobilesearch&cs=1&oe=UTF-8", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data[0] !== "SUCCESS") throw new Error("인식 실패");
+  return data[1][0][1]; // 후보 낱말 배열
+}
+
+document.getElementById("checkBtn").onclick = async () => {
+  const out = document.getElementById("result");
+  if (!strokes.length) { out.textContent = "먼저 글씨를 써 주세요!"; return; }
+  out.textContent = "읽는 중이에요...";
+  try {
+    const cands = (await recognize()).map(c => c.replace(/\s/g, ""));
+    const [answer, desc] = WORDS[idx];
+    const correct = cands.includes(answer);
+    const mine = correct ? answer : (cands[0] || "?");
+    out.innerHTML =
+      `<div class="match"><div>정답 <b>${answer}</b></div><div>내 답 <b>${mine}</b></div></div>` +
+      (correct
+        ? `<div class="ok">정답이에요! 참 잘했어요</div>`
+        : `<div class="no">아쉬워요! 정답은 ${answer}${hasBatchim(answer) ? "이었어요" : "였어요"}</div>`) +
+      `<div class="desc"><b>${answer}</b> : ${desc}</div>`;
+  } catch (err) {
+    out.innerHTML = `<div class="no">글씨를 읽지 못했어요</div><div class="desc">인터넷 연결을 확인해 주세요.</div>`;
+  }
+};
+document.getElementById("clearBtn").onclick = clearPad;
+document.getElementById("nextBtn").onclick = () => { nextWord(); showQuestion(); };
+
+// 전체화면
+const fsBtn = document.getElementById("fsBtn");
+fsBtn.onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  else document.exitFullscreen();
+};
+document.addEventListener("fullscreenchange", () => {
+  fsBtn.textContent = document.fullscreenElement ? "전체화면 끄기" : "전체화면";
+  setTimeout(resizePad, 100);
+});
+
+window.addEventListener("resize", resizePad);
+resizePad();
+nextWord();
+showQuestion();
+</script>
+</body>
+</html>
